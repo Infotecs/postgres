@@ -42,6 +42,15 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
+#ifdef WRITE_ERROR_EXIT
+#undef WRITE_ERROR_EXIT
+#endif
+#define WRITE_ERROR_EXIT \
+	do { \
+		exit_horribly(modulename, "could not write to output file: %s\n", \
+		ctx && ctx->dataFH && ctx->dataFH->compressedfp? get_gz_error(ctx->dataFH->compressedfp) : strerror(errno)); \
+	} while (0)
+
 typedef struct
 {
 	/*

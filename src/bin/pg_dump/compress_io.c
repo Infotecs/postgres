@@ -422,23 +422,6 @@ WriteDataToArchiveNone(ArchiveHandle *AH, CompressorState *cs,
 }
 
 
-/*----------------------
- * Compressed stream API
- *----------------------
- */
-
-/*
- * cfp represents an open stream, wrapping the underlying FILE or gzFile
- * pointer. This is opaque to the callers.
- */
-struct cfp
-{
-	FILE	   *uncompressedfp;
-#ifdef HAVE_LIBZ
-	gzFile		compressedfp;
-#endif
-};
-
 #ifdef HAVE_LIBZ
 static int	hasSuffix(const char *filename, const char *suffix);
 #endif
@@ -593,7 +576,7 @@ cfread(void *ptr, int size, cfp *fp)
 		ret = gzread(fp->compressedfp, ptr, size);
 		if (ret != size && !gzeof(fp->compressedfp))
 			exit_horribly(modulename,
-					"could not read from input file: %s\n", strerror(errno));
+					"could not read from input file: %s\n", get_gz_error(fp->compressedfp));
 	}
 	else
 #endif
@@ -629,7 +612,7 @@ cfgetc(cfp *fp)
 		{
 			if (!gzeof(fp->compressedfp))
 				exit_horribly(modulename,
-					"could not read from input file: %s\n", strerror(errno));
+					"could not read from input file: %s\n", get_gz_error(fp->compressedfp));
 			else
 				exit_horribly(modulename,
 							"could not read from input file: end of file\n");
@@ -710,4 +693,16 @@ hasSuffix(const char *filename, const char *suffix)
 				  suffixlen) == 0;
 }
 
+const char *
+get_gz_error(gzFile gzf)
+{
+	int errnum;
+	static const char fallback[] = "Zlib error";
+	const int maxlen = 255;
+	const char *errmsg = gzerror(gzf, &errnum);
+	if(!errmsg || !memchr(errmsg, 0, maxlen))
+		errmsg = fallback;
+
+	return errnum == Z_ERRNO ? strerror(errno) : errmsg;
+}
 #endif

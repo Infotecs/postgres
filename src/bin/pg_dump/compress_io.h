@@ -27,6 +27,24 @@ typedef enum
 	COMPR_ALG_LIBZ
 } CompressionAlgorithm;
 
+/*----------------------
+ * Compressed stream API
+ *----------------------
+ */
+
+/*
+ * cfp represents an open stream, wrapping the underlying FILE or gzFile
+ * pointer. This is opaque to the callers.
+ */
+typedef struct 
+{
+	FILE	   *uncompressedfp;
+#ifdef HAVE_LIBZ
+	gzFile		compressedfp;
+#endif
+} cfp;
+
+
 /* Prototype for callback function to WriteDataToArchive() */
 typedef void (*WriteFunc) (ArchiveHandle *AH, const char *buf, size_t len);
 
@@ -52,10 +70,6 @@ extern void ReadDataFromArchive(ArchiveHandle *AH, int compression,
 extern void WriteDataToArchive(ArchiveHandle *AH, CompressorState *cs,
 				   const void *data, size_t dLen);
 extern void EndCompressor(ArchiveHandle *AH, CompressorState *cs);
-
-
-typedef struct cfp cfp;
-
 extern cfp *cfopen(const char *path, const char *mode, int compression);
 extern cfp *cfopen_read(const char *path, const char *mode);
 extern cfp *cfopen_write(const char *path, const char *mode, int compression);
@@ -65,5 +79,6 @@ extern int	cfgetc(cfp *fp);
 extern char *cfgets(cfp *fp, char *buf, int len);
 extern int	cfclose(cfp *fp);
 extern int	cfeof(cfp *fp);
+extern const char * get_gz_error(gzFile gzf);
 
 #endif

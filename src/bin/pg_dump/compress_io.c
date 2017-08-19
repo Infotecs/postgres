@@ -388,7 +388,7 @@ ReadDataFromArchiveZlib(ArchiveHandle *AH, ReadFunc readF)
 	free(out);
 	free(zp);
 }
-#endif   /* HAVE_LIBZ */
+#endif							/* HAVE_LIBZ */
 
 
 /*
@@ -421,6 +421,23 @@ WriteDataToArchiveNone(ArchiveHandle *AH, CompressorState *cs,
 	return;
 }
 
+
+/*----------------------
+ * Compressed stream API
+ *----------------------
+ */
+
+/*
+ * cfp represents an open stream, wrapping the underlying FILE or gzFile
+ * pointer. This is opaque to the callers.
+ */
+struct cfp
+{
+	FILE	   *uncompressedfp;
+#ifdef HAVE_LIBZ
+	gzFile		compressedfp;
+#endif
+};
 
 #ifdef HAVE_LIBZ
 static int	hasSuffix(const char *filename, const char *suffix);
@@ -575,8 +592,14 @@ cfread(void *ptr, int size, cfp *fp)
 	{
 		ret = gzread(fp->compressedfp, ptr, size);
 		if (ret != size && !gzeof(fp->compressedfp))
+		{
+			int			errnum;
+			const char *errmsg = gzerror(fp->compressedfp, &errnum);
+
 			exit_horribly(modulename,
-					"could not read from input file: %s\n", get_gz_error(fp->compressedfp));
+						  "could not read from input file: %s\n",
+						  errnum == Z_ERRNO ? strerror(errno) : errmsg);
+		}
 	}
 	else
 #endif
@@ -612,10 +635,10 @@ cfgetc(cfp *fp)
 		{
 			if (!gzeof(fp->compressedfp))
 				exit_horribly(modulename,
-					"could not read from input file: %s\n", get_gz_error(fp->compressedfp));
+							  "could not read from input file: %s\n", strerror(errno));
 			else
 				exit_horribly(modulename,
-							"could not read from input file: end of file\n");
+							  "could not read from input file: end of file\n");
 		}
 	}
 	else
@@ -678,6 +701,22 @@ cfeof(cfp *fp)
 		return feof(fp->uncompressedfp);
 }
 
+const char *
+get_cfp_error(cfp *fp)
+{
+#ifdef HAVE_LIBZ
+	if (fp->compressedfp)
+	{
+		int			errnum;
+		const char *errmsg = gzerror(fp->compressedfp, &errnum);
+
+		if (errnum != Z_ERRNO)
+			return errmsg;
+	}
+#endif
+	return strerror(errno);
+}
+
 #ifdef HAVE_LIBZ
 static int
 hasSuffix(const char *filename, const char *suffix)
@@ -693,16 +732,4 @@ hasSuffix(const char *filename, const char *suffix)
 				  suffixlen) == 0;
 }
 
-const char *
-get_gz_error(gzFile gzf)
-{
-	int errnum;
-	static const char fallback[] = "Zlib error";
-	const int maxlen = 255;
-	const char *errmsg = gzerror(gzf, &errnum);
-	if(!errmsg || !memchr(errmsg, 0, maxlen))
-		errmsg = fallback;
-
-	return errnum == Z_ERRNO ? strerror(errno) : errmsg;
-}
 #endif
